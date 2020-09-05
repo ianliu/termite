@@ -1636,6 +1636,19 @@ static void on_alpha_screen_changed(GtkWindow *window, GdkScreen *, void *) {
     gtk_widget_set_visual(GTK_WIDGET(window), visual);
 }
 
+static maybe<std::pair<long, long>> parse_size_string(const char *size) {
+    char *end;
+    long cols, rows;
+    cols = strtol(size, &end, 10);
+    if (size == end || *end != 'x')
+        return {};
+    size = end + 1;
+    rows = strtol(size, &end, 10);
+    if (size == end || *end != '\0')
+        return {};
+    return std::make_pair(cols, rows);
+}
+
 int main(int argc, char **argv) {
     GError *error = nullptr;
     const char *const term = "xterm-termite";
@@ -1644,7 +1657,7 @@ int main(int argc, char **argv) {
 
     GOptionContext *context = g_option_context_new(nullptr);
     char *role = nullptr, *execute = nullptr, *config_file = nullptr;
-    char *title = nullptr, *icon = nullptr;
+    char *title = nullptr, *icon = nullptr, *size = nullptr;
     bool show_scrollbar = false;
     const GOptionEntry entries[] = {
         {"version", 'v', 0, G_OPTION_ARG_NONE, &version, "Version info", nullptr},
@@ -1655,6 +1668,7 @@ int main(int argc, char **argv) {
         {"hold", 0, 0, G_OPTION_ARG_NONE, &hold, "Remain open after child process exits", nullptr},
         {"config", 'c', 0, G_OPTION_ARG_STRING, &config_file, "Path of config file", "CONFIG"},
         {"icon", 'i', 0, G_OPTION_ARG_STRING, &icon, "Icon", "ICON"},
+        {"size", 's', 0, G_OPTION_ARG_STRING, &size, "Terminal size in COLSxROWS", "SIZE"},
         {nullptr, 0, 0, G_OPTION_ARG_NONE, nullptr, nullptr, nullptr}
     };
     g_option_context_add_main_entries(context, entries, nullptr);
@@ -1800,6 +1814,15 @@ int main(int argc, char **argv) {
     if (icon) {
         gtk_window_set_icon_name(GTK_WINDOW(window), icon);
         g_free(icon);
+    }
+
+    if (size) {
+        if (auto sz = parse_size_string(size)) {
+            vte_terminal_set_size(vte, std::get<0>(*sz), std::get<1>(*sz));
+        } else {
+            g_printerr("couldn't parse --size parameter, expecting COLSxROWS format\n");
+            return EXIT_FAILURE;
+        }
     }
 
     gtk_widget_grab_focus(vte_widget);
